@@ -17,20 +17,20 @@ export class ResearcherLibraryView extends ItemView {
   }
 
   getDisplayText() {
-    return "Researcher Library";
+    return "Researcher library";
   }
 
   statusFilter: string = "All";
   searchTerm: string = "";
   sortOption: string = "None";
 
-  async onOpen() {
+  onOpen() {
     const container = this.containerEl.children[1];
     container.empty();
-    container.createEl("h2", { text: "Researcher Library" });
+    container.createEl("h2", { text: "Researcher library" });
 
     const actionsEl = container.createEl("div");
-    actionsEl.style.marginBottom = "1em";
+    actionsEl.setCssProps({ "margin-bottom": "1em" });
 
     new Setting(actionsEl)
       .setName("Import PDF")
@@ -45,7 +45,7 @@ export class ResearcherLibraryView extends ItemView {
       });
 
     const filterEl = container.createEl("div");
-    filterEl.style.marginBottom = "1em";
+    filterEl.setCssProps({ "margin-bottom": "1em" });
     new Setting(filterEl)
       .setName("Filter by status")
       .addDropdown((dropdown) => {
@@ -79,10 +79,10 @@ export class ResearcherLibraryView extends ItemView {
       .addDropdown((dropdown) => {
         dropdown
           .addOption("None", "None")
-          .addOption("ImportDateAsc", "Import Date (Oldest First)")
-          .addOption("ImportDateDesc", "Import Date (Newest First)")
-          .addOption("UpdatedDateAsc", "Updated Date (Oldest First)")
-          .addOption("UpdatedDateDesc", "Updated Date (Newest First)")
+          .addOption("ImportDateAsc", "Import date (oldest first)")
+          .addOption("ImportDateDesc", "Import date (newest first)")
+          .addOption("UpdatedDateAsc", "Updated date (oldest first)")
+          .addOption("UpdatedDateDesc", "Updated date (newest first)")
           .setValue(this.sortOption)
           .onChange((value) => {
             this.sortOption = value;
@@ -93,7 +93,7 @@ export class ResearcherLibraryView extends ItemView {
     this.renderPapers();
   }
   
-  async renderPapers() {
+  renderPapers() {
     const container = this.containerEl.children[1];
     const papersEl = container.querySelector("#papers-list");
     if (papersEl) {
@@ -170,42 +170,39 @@ export class ResearcherLibraryView extends ItemView {
               modal.open();
             });
           })
-                    .addExtraButton((btn) => {
-                      const notePath = `researcher-library/notes/${paper.basename}.md`;
-                      const noteFile = this.app.vault.getAbstractFileByPath(notePath);
-                      if (noteFile) {
-                        btn.setIcon("file-edit").setTooltip("Edit note").onClick(async () => {
-                          console.log("Opening note for editing:", noteFile);
-                          await this.app.workspace.getLeaf(true).openFile(noteFile as TFile);
-                        });
-                      } else {
-                        btn.setIcon("file-plus-2").setTooltip("Create note for this paper").onClick(async () => {
-                          console.log("Creating note for paper:", paper);
-                          await this.plugin.createNoteForPaper(paper);
-                        });
-                      }
-                    });
+          .addExtraButton((btn) => {
+            const notePath = `researcher-library/notes/${paper.basename}.md`;
+            const noteFile = this.app.vault.getAbstractFileByPath(notePath);
+            if (noteFile instanceof TFile) {
+              btn.setIcon("file-edit").setTooltip("Edit note").onClick(() => {
+                void this.app.workspace.getLeaf(true).openFile(noteFile);
+              });
+            } else {
+              btn.setIcon("file-plus-2").setTooltip("Create note for this paper").onClick(() => {
+                void this.plugin.createNoteForPaper(paper);
+              });
+            }
+          });
                   
-                  setting.descEl.createEl("div", { text: `Date Imported: ${new Date(paper.stat.ctime).toLocaleDateString()}` });
-                  setting.descEl.createEl("div", { text: `Last Updated: ${new Date(paper.stat.mtime).toLocaleDateString()}` });
+        setting.descEl.createEl("div", { text: `Date imported: ${new Date(paper.stat.ctime).toLocaleDateString()}` });
+        setting.descEl.createEl("div", { text: `Last updated: ${new Date(paper.stat.mtime).toLocaleDateString()}` });
                   
-                  const nameEl = setting.nameEl;
-                  nameEl.empty();
-                  const link = nameEl.createEl("a", {
-                    text: frontmatter?.title || paper.basename + ".pdf",
-                    href: "#",
-                  });
-                  link.addEventListener("click", async (event) => {
-                    event.preventDefault();
-                    const notePath = `researcher-library/notes/${paper.basename}.md`;
-                    const noteFile = this.app.vault.getAbstractFileByPath(notePath);
-                    if (noteFile) {
-                      await this.app.workspace.getLeaf(true).openFile(noteFile as TFile);
-                    }
-                    else {
-                      await this.plugin.createNoteForPaper(paper);
-                    }
-                  });
+        const nameEl = setting.nameEl;
+        nameEl.empty();
+        const link = nameEl.createEl("a", {
+          text: frontmatter?.title || `${paper.basename}.pdf`,
+          href: "#",
+        });
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          const notePath = `researcher-library/notes/${paper.basename}.md`;
+          const noteFile = this.app.vault.getAbstractFileByPath(notePath);
+          if (noteFile instanceof TFile) {
+            void this.app.workspace.getLeaf(true).openFile(noteFile);
+          } else {
+            void this.plugin.createNoteForPaper(paper);
+          }
+        });
 
         const detailsDiv = paperDiv.createEl("div", { cls: "researcher-library-paper-details" });
         detailsDiv.createEl("span", { text: `Status: ${frontmatter?.status || "N/A"}` });

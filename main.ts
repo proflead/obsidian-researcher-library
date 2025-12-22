@@ -1,13 +1,11 @@
-import { App, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { PDFDocument } from 'pdf-lib';
 import { RESEARCHER_LIBRARY_VIEW_TYPE, ResearcherLibraryView } from './view';
 
 const PLUGIN_FOLDER = "researcher-library";
 
 export default class ResearcherLibraryPlugin extends Plugin {
-	researcherLibraryView: ResearcherLibraryView;
-
-	async onload() {
+	onload() {
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
 			id: 'import-pdf',
@@ -20,12 +18,11 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		this.registerView(
 			RESEARCHER_LIBRARY_VIEW_TYPE,
 			(leaf) => {
-				this.researcherLibraryView = new ResearcherLibraryView(leaf, this);
-				return this.researcherLibraryView;
+				return new ResearcherLibraryView(leaf, this);
 			}
 		);
 
-		this.addRibbonIcon("book", "Open Researcher Library", () => {
+		this.addRibbonIcon("book", "Open researcher library", () => {
 			this.activateView();
 		});
 	}
@@ -43,8 +40,9 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		const notePath = `${notesPath}/${paperMarkdownFile.basename}.md`;
 		const pdfPath = `${PLUGIN_FOLDER}/papers/${paperMarkdownFile.basename}.pdf`;
 		const pdfFile = this.app.vault.getAbstractFileByPath(pdfPath);
-		const pdfLink = pdfFile ? this.app.fileManager.generateMarkdownLink(pdfFile as TFile, '') : '';
-		const mdLink = this.app.fileManager.generateMarkdownLink(paperMarkdownFile, '');
+		const pdfLink = pdfFile instanceof TFile
+			? this.app.fileManager.generateMarkdownLink(pdfFile, '')
+			: '';
 
 		const frontmatter = this.app.metadataCache.getFileCache(paperMarkdownFile)?.frontmatter;
 
@@ -57,7 +55,7 @@ export default class ResearcherLibraryPlugin extends Plugin {
 
 `;
 		const noteFile = await this.app.vault.create(notePath, content);
-		this.app.workspace.getLeaf(true).openFile(noteFile);
+		await this.app.workspace.getLeaf(true).openFile(noteFile);
 	}
 
 	async activateView() {
@@ -89,43 +87,45 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		}
 	}
 
-	public async importPdf() {
+	public importPdf() {
 		const input = document.createElement('input');
 		input.type = 'file';
 		input.accept = '.pdf';
-		input.onchange = async (e) => {
+		input.onchange = (e) => {
 			const target = e.target as HTMLInputElement;
 			if (!target.files || target.files.length === 0) {
 				return;
 			}
 			const file = target.files[0];
+			void this.handlePdfImport(file);
+		};
+		input.click();
+	}
 
-			const papersPath = `${PLUGIN_FOLDER}/papers`;
-			if (!await this.app.vault.adapter.exists(PLUGIN_FOLDER)) {
-				await this.app.vault.createFolder(PLUGIN_FOLDER);
-			}
-			if (!await this.app.vault.adapter.exists(papersPath)) {
-				await this.app.vault.createFolder(papersPath);
-			}
+	private async handlePdfImport(file: File) {
+		const papersPath = `${PLUGIN_FOLDER}/papers`;
+		if (!await this.app.vault.adapter.exists(PLUGIN_FOLDER)) {
+			await this.app.vault.createFolder(PLUGIN_FOLDER);
+		}
+		if (!await this.app.vault.adapter.exists(papersPath)) {
+			await this.app.vault.createFolder(papersPath);
+		}
 
-			const filePath = `${papersPath}/${file.name}`;
-			const reader = new FileReader();
-			reader.onload = async () => {
-				const content = reader.result as ArrayBuffer;
-				await this.app.vault.createBinary(filePath, content); // Create the PDF file
+		const filePath = `${papersPath}/${file.name}`;
+		const content = await file.arrayBuffer();
+		await this.app.vault.createBinary(filePath, content);
 
-				// Create a markdown file for the paper
-				const paperMdPath = `${papersPath}/md`;
-				try {
-					await this.app.vault.createFolder(paperMdPath);
-				} catch (e) {
-					// Folder already exists
-				}
-				const markdownFileName = `${file.name.replace(/\.pdf$/, '')}.md`;
-				const markdownFilePath = `${paperMdPath}/${markdownFileName}`;
+		const paperMdPath = `${papersPath}/md`;
+		try {
+			await this.app.vault.createFolder(paperMdPath);
+		} catch {
+			// Folder already exists
+		}
+		const markdownFileName = `${file.name.replace(/\.pdf$/, '')}.md`;
+		const markdownFilePath = `${paperMdPath}/${markdownFileName}`;
 
-				const metadata = await this.extractMetadata(content);
-				const markdownContent = `---
+		const metadata = await this.extractMetadata(content);
+		const markdownContent = `---
 title: "${metadata.title || ""}"
 author: "${metadata.author || ""}"
 publicationYear: "${metadata.publicationYear || ""}"
@@ -135,16 +135,12 @@ status: "to read"
 # [[${file.name}]]
 
 `;
-				const newMarkdownFile = await this.app.vault.create(markdownFilePath, markdownContent);
-				
-				if (newMarkdownFile) {
-					new Notice(`Imported ${file.name} and created markdown file`);
-					this.activateView();
-				}
-			};
-			reader.readAsArrayBuffer(file);
-		};
-		input.click();
+		const newMarkdownFile = await this.app.vault.create(markdownFilePath, markdownContent);
+
+		if (newMarkdownFile) {
+			new Notice(`Imported ${file.name} and created markdown file`);
+			await this.activateView();
+		}
 	}
 
 
@@ -165,4 +161,3 @@ status: "to read"
 
 	}
 }
-

@@ -12,7 +12,7 @@ export class EditMetadataModal extends Modal {
     this.file = file;
     this.title = "";
     this.author = "";
-    this.status = "To Read";
+    this.status = "to read";
     this.category = "";
   }
 
@@ -24,7 +24,7 @@ export class EditMetadataModal extends Modal {
     await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
       this.title = frontmatter.title || "";
       this.author = frontmatter.author || "";
-      this.status = frontmatter.status || "To Read";
+      this.status = frontmatter.status || "to read";
       this.category = frontmatter.category || "";
     });
 
@@ -80,40 +80,16 @@ export class EditMetadataModal extends Modal {
         button
           .setButtonText("Save")
           .setCta()
-          .onClick(async () => {
-            await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
-              frontmatter.title = this.title;
-              frontmatter.author = this.author;
-              frontmatter.status = this.status;
-              frontmatter.category = this.category;
-            });
-            this.close();
+          .onClick(() => {
+            void this.saveMetadata();
           })
       )
       .addButton((button) =>
         button
           .setButtonText("Remove")
           .setWarning()
-          .onClick(async () => {
-            if (confirm("Are you sure you want to remove this paper and its note?")) {
-              // Delete the markdown file
-              await this.app.vault.delete(this.file);
-
-              // Delete the associated PDF file
-              const pdfPath = `researcher-library/papers/${this.file.basename}.pdf`;
-              const pdfFile = this.app.vault.getAbstractFileByPath(pdfPath);
-              if (pdfFile) {
-                await this.app.vault.delete(pdfFile);
-              }
-
-              // Delete the associated note file
-              const notePath = `researcher-library/notes/${this.file.basename}.md`;
-              const noteFile = this.app.vault.getAbstractFileByPath(notePath);
-              if (noteFile) {
-                await this.app.vault.delete(noteFile);
-              }
-              this.close();
-            }
+          .onClick(() => {
+            void this.removePaper();
           })
       );
   }
@@ -122,4 +98,101 @@ export class EditMetadataModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
   }
+
+  private async saveMetadata() {
+    await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
+      frontmatter.title = this.title;
+      frontmatter.author = this.author;
+      frontmatter.status = this.status;
+      frontmatter.category = this.category;
+    });
+    this.close();
+  }
+
+  private async removePaper() {
+    const confirmed = await confirmRemoval(
+      this.app,
+      "Remove paper",
+      "Are you sure you want to remove this paper and its note?"
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await this.app.fileManager.trashFile(this.file);
+
+    const pdfPath = `researcher-library/papers/${this.file.basename}.pdf`;
+    const pdfFile = this.app.vault.getAbstractFileByPath(pdfPath);
+    if (pdfFile instanceof TFile) {
+      await this.app.fileManager.trashFile(pdfFile);
+    }
+
+    const notePath = `researcher-library/notes/${this.file.basename}.md`;
+    const noteFile = this.app.vault.getAbstractFileByPath(notePath);
+    if (noteFile instanceof TFile) {
+      await this.app.fileManager.trashFile(noteFile);
+    }
+    this.close();
+  }
+}
+
+class ConfirmationModal extends Modal {
+  private readonly titleText: string;
+  private readonly bodyText: string;
+  private readonly resolve: (confirmed: boolean) => void;
+  private resolved = false;
+
+  constructor(app: App, titleText: string, bodyText: string, resolve: (confirmed: boolean) => void) {
+    super(app);
+    this.titleText = titleText;
+    this.bodyText = bodyText;
+    this.resolve = resolve;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: this.titleText });
+    contentEl.createEl("p", { text: this.bodyText });
+
+    new Setting(contentEl)
+      .addButton((button) =>
+        button
+          .setButtonText("Cancel")
+          .onClick(() => {
+            this.resolveOnce(false);
+            this.close();
+          })
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Remove")
+          .setWarning()
+          .onClick(() => {
+            this.resolveOnce(true);
+            this.close();
+          })
+      );
+  }
+
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+    this.resolveOnce(false);
+  }
+
+  private resolveOnce(confirmed: boolean) {
+    if (this.resolved) {
+      return;
+    }
+    this.resolved = true;
+    this.resolve(confirmed);
+  }
+}
+
+function confirmRemoval(app: App, titleText: string, bodyText: string) {
+  return new Promise<boolean>((resolve) => {
+    const modal = new ConfirmationModal(app, titleText, bodyText, resolve);
+    modal.open();
+  });
 }
