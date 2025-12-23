@@ -9,7 +9,7 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
 			id: 'import-pdf',
-			name: 'Import PDF',
+			name: 'Import pdf',
 			callback: () => {
 				this.importPdf();
 			}
@@ -23,7 +23,7 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		);
 
 		this.addRibbonIcon("book", "Open researcher library", () => {
-			this.activateView();
+			void this.activateView();
 		});
 	}
 
@@ -79,7 +79,7 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		}
 
 		if (leaf) {
-			this.app.workspace.revealLeaf(leaf);
+			await this.app.workspace.revealLeaf(leaf);
 			const view = leaf.view as ResearcherLibraryView;
 			if (view && view.renderPapers) {
 				view.renderPapers();

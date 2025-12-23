@@ -33,8 +33,8 @@ export class ResearcherLibraryView extends ItemView {
     actionsEl.setCssProps({ "margin-bottom": "1em" });
 
     new Setting(actionsEl)
-      .setName("Import PDF")
-      .setDesc("Import a PDF file into your library.")
+      .setName("Import pdf")
+      .setDesc("Import a pdf file into your library.")
       .addButton((button) => {
         button
           .setButtonText("Import")
