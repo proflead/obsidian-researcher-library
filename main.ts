@@ -9,7 +9,7 @@ export default class ResearcherLibraryPlugin extends Plugin {
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
 			id: 'import-pdf',
-			name: 'Import pdf',
+			name: 'Import PDF',
 			callback: () => {
 				this.importPdf();
 			}

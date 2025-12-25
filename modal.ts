@@ -54,10 +54,10 @@ export class EditMetadataModal extends Modal {
       .setName("Status")
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("to read", "to read")
-          .addOption("reading", "reading")
-          .addOption("finish", "finish")
-          .addOption("re-read", "re-read")
+          .addOption("to read", "To read")
+          .addOption("reading", "Reading")
+          .addOption("finish", "Finished")
+          .addOption("re-read", "Re-read")
           .setValue(this.status)
           .onChange((value) => {
             this.status = value;

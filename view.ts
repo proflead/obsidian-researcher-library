@@ -33,8 +33,8 @@ export class ResearcherLibraryView extends ItemView {
     actionsEl.setCssProps({ "margin-bottom": "1em" });
 
     new Setting(actionsEl)
-      .setName("Import pdf")
-      .setDesc("Import a pdf file into your library.")
+      .setName("Import PDF")
+      .setDesc("Import a PDF file into your library.")
       .addButton((button) => {
         button
           .setButtonText("Import")
@@ -51,10 +51,10 @@ export class ResearcherLibraryView extends ItemView {
       .addDropdown((dropdown) => {
         dropdown
           .addOption("All", "All")
-          .addOption("to read", "to read")
-          .addOption("reading", "reading")
-          .addOption("finish", "finish")
-          .addOption("re-read", "re-read")
+          .addOption("to read", "To read")
+          .addOption("reading", "Reading")
+          .addOption("finish", "Finished")
+          .addOption("re-read", "Re-read")
           .setValue(this.statusFilter)
           .onChange((value) => {
             this.statusFilter = value;
