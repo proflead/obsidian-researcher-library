@@ -1,20 +1,75 @@
-.researcher-library-paper {
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 5px;
-  padding: 1em;
-  margin-bottom: 1em;
+.researcher-library-view {
+  --researcher-library-card-radius: var(--radius-m);
 }
 
-.researcher-library-paper-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.researcher-library-controls,
+.researcher-library-filters {
+  margin-bottom: var(--size-4-4);
+}
+
+.researcher-library-filters {
+  padding: 0 var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--researcher-library-card-radius);
+  background: var(--background-secondary);
+}
+
+.researcher-library-papers {
+  display: grid;
+  gap: var(--size-4-3);
+}
+
+.researcher-library-paper {
+  padding: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--researcher-library-card-radius);
+  background: var(--background-primary);
+}
+
+.researcher-library-paper:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.researcher-library-paper .setting-item {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.researcher-library-title {
+  overflow-wrap: anywhere;
+  font-weight: var(--font-semibold);
 }
 
 .researcher-library-paper-details {
   display: flex;
-  gap: 1em;
-  margin-top: 0.5em;
-  font-size: 0.9em;
+  flex-wrap: wrap;
+  gap: var(--size-2-2) var(--size-4-3);
+  margin-top: var(--size-4-2);
   color: var(--text-muted);
+  font-size: var(--font-smallest);
+}
+
+.researcher-library-detail-label {
+  color: var(--text-normal);
+  font-weight: var(--font-medium);
+}
+
+.researcher-library-empty {
+  padding: var(--size-4-6) var(--size-4-3);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: var(--researcher-library-card-radius);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .researcher-library-paper .setting-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--size-4-2);
+  }
+
+  .researcher-library-paper .setting-item-control {
+    justify-content: flex-start;
+  }
 }

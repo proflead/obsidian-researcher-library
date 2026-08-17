@@ -1,138 +1,139 @@
-import { App, Modal, Setting, TFile } from "obsidian";
+import { App, Modal, Notice, Setting, TFile } from "obsidian";
+import { frontmatterText, getPaperFrontmatter, normalizePaperStatus, PAPER_STATUSES } from "./paper";
+import type ResearcherLibraryPlugin from "./main";
 
 export class EditMetadataModal extends Modal {
-  file: TFile;
-  title: string;
-  author: string;
-  status: string;
-  category: string;
+  private readonly plugin: ResearcherLibraryPlugin;
+  private readonly file: TFile;
+  private readonly onChanged: () => void;
+  private title = "";
+  private author = "";
+  private publicationYear = "";
+  private status = "to read";
+  private category = "";
 
-  constructor(app: App, file: TFile) {
+  constructor(
+    app: App,
+    plugin: ResearcherLibraryPlugin,
+    file: TFile,
+    onChanged: () => void,
+  ) {
     super(app);
+    this.plugin = plugin;
     this.file = file;
-    this.title = "";
-    this.author = "";
-    this.status = "to read";
-    this.category = "";
+    this.onChanged = onChanged;
   }
 
-  async onOpen() {
+  onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: `Edit metadata for ${this.file.name}` });
 
-    await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
-      this.title = frontmatter.title || "";
-      this.author = frontmatter.author || "";
-      this.status = frontmatter.status || "to read";
-      this.category = frontmatter.category || "";
-    });
+    const frontmatter = getPaperFrontmatter(this.app, this.file);
+    this.title = frontmatterText(frontmatter.title);
+    this.author = frontmatterText(frontmatter.author);
+    this.publicationYear = frontmatterText(frontmatter.publicationYear);
+    this.status = normalizePaperStatus(frontmatter.status);
+    this.category = frontmatterText(frontmatter.category);
 
     new Setting(contentEl)
       .setName("Title")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter title")
-          .setValue(this.title)
-          .onChange((value) => {
-            this.title = value;
-          })
-      );
+      .addText((text) => text
+        .setPlaceholder("Enter title")
+        .setValue(this.title)
+        .onChange((value) => {
+          this.title = value;
+        }));
 
     new Setting(contentEl)
       .setName("Author")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter author")
-          .setValue(this.author)
-          .onChange((value) => {
-            this.author = value;
-          })
-      );
+      .addText((text) => text
+        .setPlaceholder("Enter author")
+        .setValue(this.author)
+        .onChange((value) => {
+          this.author = value;
+        }));
+
+    new Setting(contentEl)
+      .setName("Publication year")
+      .setDesc("The PDF creation year is stored separately and is not assumed to be the publication year.")
+      .addText((text) => text
+        .setPlaceholder("For example, 2024")
+        .setValue(this.publicationYear)
+        .onChange((value) => {
+          this.publicationYear = value.trim();
+        }));
 
     new Setting(contentEl)
       .setName("Status")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("to read", "To read")
-          .addOption("reading", "Reading")
-          .addOption("finish", "Finished")
-          .addOption("re-read", "Re-read")
-          .setValue(this.status)
-          .onChange((value) => {
-            this.status = value;
-          })
-      );
+      .addDropdown((dropdown) => {
+        for (const [value, label] of PAPER_STATUSES) {
+          dropdown.addOption(value, label);
+        }
+        dropdown.setValue(this.status).onChange((value) => {
+          this.status = value;
+        });
+      });
 
     new Setting(contentEl)
       .setName("Category")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter category")
-          .setValue(this.category)
-          .onChange((value) => {
-            this.category = value;
-          })
-      );
+      .addText((text) => text
+        .setPlaceholder("Enter category")
+        .setValue(this.category)
+        .onChange((value) => {
+          this.category = value;
+        }));
 
     new Setting(contentEl)
-      .addButton((button) =>
-        button
-          .setButtonText("Save")
-          .setCta()
-          .onClick(() => {
-            void this.saveMetadata();
-          })
-      )
-      .addButton((button) =>
-        button
-          .setButtonText("Remove")
-          .setWarning()
-          .onClick(() => {
-            void this.removePaper();
-          })
-      );
+      .addButton((button) => button
+        .setButtonText("Save")
+        .setCta()
+        .onClick(() => {
+          void this.saveMetadata();
+        }))
+      .addButton((button) => button
+        .setButtonText("Remove")
+        .setWarning()
+        .onClick(() => {
+          void this.confirmAndRemove();
+        }));
   }
 
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+  onClose(): void {
+    this.contentEl.empty();
   }
 
-  private async saveMetadata() {
-    await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
-      frontmatter.title = this.title;
-      frontmatter.author = this.author;
-      frontmatter.status = this.status;
-      frontmatter.category = this.category;
-    });
-    this.close();
+  private async saveMetadata(): Promise<void> {
+    try {
+      await this.app.fileManager.processFrontMatter(this.file, (frontmatter: Record<string, unknown>) => {
+        frontmatter.title = this.title.trim();
+        frontmatter.author = this.author.trim();
+        frontmatter.publicationYear = this.publicationYear;
+        frontmatter.status = this.status;
+        frontmatter.category = this.category.trim();
+      });
+      this.onChanged();
+      this.close();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Could not save metadata: ${message}`, 8000);
+    }
   }
 
-  private async removePaper() {
+  private async confirmAndRemove(): Promise<void> {
     const confirmed = await confirmRemoval(
       this.app,
       "Remove paper",
-      "Are you sure you want to remove this paper and its note?"
+      `Move “${this.title || this.file.basename}”, its PDF, and its note to the trash?`,
     );
     if (!confirmed) {
       return;
     }
 
-    await this.app.fileManager.trashFile(this.file);
-
-    const pdfPath = `researcher-library/papers/${this.file.basename}.pdf`;
-    const pdfFile = this.app.vault.getAbstractFileByPath(pdfPath);
-    if (pdfFile instanceof TFile) {
-      await this.app.fileManager.trashFile(pdfFile);
+    if (await this.plugin.removePaper(this.file)) {
+      this.onChanged();
+      this.close();
     }
-
-    const notePath = `researcher-library/notes/${this.file.basename}.md`;
-    const noteFile = this.app.vault.getAbstractFileByPath(notePath);
-    if (noteFile instanceof TFile) {
-      await this.app.fileManager.trashFile(noteFile);
-    }
-    this.close();
   }
 }
 
@@ -149,50 +150,42 @@ class ConfirmationModal extends Modal {
     this.resolve = resolve;
   }
 
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h2", { text: this.titleText });
-    contentEl.createEl("p", { text: this.bodyText });
+  onOpen(): void {
+    this.contentEl.empty();
+    this.contentEl.createEl("h2", { text: this.titleText });
+    this.contentEl.createEl("p", { text: this.bodyText });
 
-    new Setting(contentEl)
-      .addButton((button) =>
-        button
-          .setButtonText("Cancel")
-          .onClick(() => {
-            this.resolveOnce(false);
-            this.close();
-          })
-      )
-      .addButton((button) =>
-        button
-          .setButtonText("Remove")
-          .setWarning()
-          .onClick(() => {
-            this.resolveOnce(true);
-            this.close();
-          })
-      );
+    new Setting(this.contentEl)
+      .addButton((button) => button
+        .setButtonText("Cancel")
+        .onClick(() => {
+          this.resolveOnce(false);
+          this.close();
+        }))
+      .addButton((button) => button
+        .setButtonText("Remove")
+        .setWarning()
+        .onClick(() => {
+          this.resolveOnce(true);
+          this.close();
+        }));
   }
 
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+  onClose(): void {
+    this.contentEl.empty();
     this.resolveOnce(false);
   }
 
-  private resolveOnce(confirmed: boolean) {
-    if (this.resolved) {
-      return;
+  private resolveOnce(confirmed: boolean): void {
+    if (!this.resolved) {
+      this.resolved = true;
+      this.resolve(confirmed);
     }
-    this.resolved = true;
-    this.resolve(confirmed);
   }
 }
 
-function confirmRemoval(app: App, titleText: string, bodyText: string) {
-  return new Promise<boolean>((resolve) => {
-    const modal = new ConfirmationModal(app, titleText, bodyText, resolve);
-    modal.open();
+function confirmRemoval(app: App, titleText: string, bodyText: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    new ConfirmationModal(app, titleText, bodyText, resolve).open();
   });
 }

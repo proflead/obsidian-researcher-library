@@ -1,219 +1,245 @@
-import { ItemView, WorkspaceLeaf, Setting, TFile } from "obsidian";
+import { ItemView, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import { EditMetadataModal } from "./modal";
+import {
+  frontmatterText,
+  getPaperFrontmatter,
+  getPaperPaths,
+  isPaperRecord,
+  normalizePaperStatus,
+  PAPER_STATUSES,
+} from "./paper";
 import ResearcherLibraryPlugin from "./main";
 
 export const RESEARCHER_LIBRARY_VIEW_TYPE = "researcher-library-view";
 
 export class ResearcherLibraryView extends ItemView {
-  plugin: ResearcherLibraryPlugin;
+  private readonly plugin: ResearcherLibraryPlugin;
+  private statusFilter = "all";
+  private searchTerm = "";
+  private sortOption = "import-desc";
+  private renderFrame: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: ResearcherLibraryPlugin) {
     super(leaf);
     this.plugin = plugin;
   }
 
-  getViewType() {
+  getViewType(): string {
     return RESEARCHER_LIBRARY_VIEW_TYPE;
   }
 
-  getDisplayText() {
+  getDisplayText(): string {
     return "Researcher library";
   }
 
-  statusFilter: string = "All";
-  searchTerm: string = "";
-  sortOption: string = "None";
+  async onOpen(): Promise<void> {
+    this.contentEl.empty();
+    this.contentEl.addClass("researcher-library-view");
+    this.contentEl.createEl("h2", { text: "Researcher library" });
 
-  onOpen() {
-    const container = this.containerEl.children[1];
-    container.empty();
-    container.createEl("h2", { text: "Researcher library" });
-
-    const actionsEl = container.createEl("div");
-    actionsEl.setCssProps({ "margin-bottom": "1em" });
-
-    new Setting(actionsEl)
-      .setName("Import PDF")
-      .setDesc("Import a PDF file into your library.")
+    const controls = this.contentEl.createDiv({ cls: "researcher-library-controls" });
+    new Setting(controls)
+      .setName("Import papers")
+      .setDesc("Add one or more research papers to the library.")
       .addButton((button) => {
         button
           .setButtonText("Import")
           .setIcon("upload")
-          .onClick(() => {
-            this.plugin.importPdf();
-          });
+          .onClick(() => this.plugin.importPdf());
       });
 
-    const filterEl = container.createEl("div");
-    filterEl.setCssProps({ "margin-bottom": "1em" });
-    new Setting(filterEl)
+    const filters = this.contentEl.createDiv({ cls: "researcher-library-filters" });
+    new Setting(filters)
       .setName("Filter by status")
       .addDropdown((dropdown) => {
+        dropdown.addOption("all", "All");
+        for (const [value, label] of PAPER_STATUSES) {
+          dropdown.addOption(value, label);
+        }
         dropdown
-          .addOption("All", "All")
-          .addOption("to read", "To read")
-          .addOption("reading", "Reading")
-          .addOption("finish", "Finished")
-          .addOption("re-read", "Re-read")
           .setValue(this.statusFilter)
           .onChange((value) => {
             this.statusFilter = value;
-            this.renderPapers();
+            this.scheduleRender();
           });
       });
 
-    new Setting(filterEl)
+    new Setting(filters)
       .setName("Search")
       .addSearch((search) => {
         search
-          .setPlaceholder("Search by title or author")
+          .setPlaceholder("Title, author, category, or year")
           .setValue(this.searchTerm)
           .onChange((value) => {
             this.searchTerm = value;
-            this.renderPapers();
+            this.scheduleRender();
           });
       });
-    
-    new Setting(filterEl)
+
+    new Setting(filters)
       .setName("Sort by")
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("None", "None")
-          .addOption("ImportDateAsc", "Import date (oldest first)")
-          .addOption("ImportDateDesc", "Import date (newest first)")
-          .addOption("UpdatedDateAsc", "Updated date (oldest first)")
-          .addOption("UpdatedDateDesc", "Updated date (newest first)")
+          .addOption("none", "None")
+          .addOption("import-asc", "Import date (oldest first)")
+          .addOption("import-desc", "Import date (newest first)")
+          .addOption("updated-asc", "Updated date (oldest first)")
+          .addOption("updated-desc", "Updated date (newest first)")
+          .addOption("title-asc", "Title")
           .setValue(this.sortOption)
           .onChange((value) => {
             this.sortOption = value;
-            this.renderPapers();
+            this.scheduleRender();
           });
       });
 
     this.renderPapers();
   }
-  
-  renderPapers() {
-    const container = this.containerEl.children[1];
-    const papersEl = container.querySelector("#papers-list");
-    if (papersEl) {
-      papersEl.remove();
+
+  public scheduleRender(): void {
+    if (this.renderFrame !== null) {
+      return;
     }
+    this.renderFrame = window.requestAnimationFrame(() => {
+      this.renderFrame = null;
+      this.renderPapers();
+    });
+  }
 
-    const papersDiv = container.createEl("div", { attr: { id: "papers-list" } });
-    const papers = this.app.vault.getFiles().filter((file) => file.path.startsWith("researcher-library/papers/md/") && file.extension === "md");
+  public renderPapers(): void {
+    const existingList = this.contentEl.querySelector("#researcher-library-papers");
+    existingList?.remove();
+    const papersContainer = this.contentEl.createDiv({
+      cls: "researcher-library-papers",
+      attr: { id: "researcher-library-papers" },
+    });
 
-    let filteredPapers = papers;
-    if (this.statusFilter !== "All") {
-      filteredPapers = [];
-      for (const paper of papers) {
-        const frontmatter = this.app.metadataCache.getFileCache(paper)?.frontmatter;
-        if (frontmatter && frontmatter.status === this.statusFilter) {
-          filteredPapers.push(paper);
-        }
-      }
-    }
-
-    if (this.searchTerm) {
-      filteredPapers = filteredPapers.filter((paper) => {
-        const frontmatter = this.app.metadataCache.getFileCache(paper)?.frontmatter;
-        if (frontmatter) {
-          const title = frontmatter.title || "";
-          const author = frontmatter.author || "";
-          const category = frontmatter.category || "";
-          return (
-            title.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-            author.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-            category.toLowerCase().includes(this.searchTerm.toLowerCase())
-          );
-        }
+    const papers = this.app.vault.getFiles().filter(isPaperRecord);
+    const query = this.searchTerm.trim().toLocaleLowerCase();
+    const filteredPapers = papers.filter((paper) => {
+      const frontmatter = getPaperFrontmatter(this.app, paper);
+      const status = normalizePaperStatus(frontmatter.status);
+      if (this.statusFilter !== "all" && status !== this.statusFilter) {
         return false;
-      });
-    }
-
-    if (this.sortOption !== "None") {
-      filteredPapers.sort((a, b) => {
-        let dateA: number;
-        let dateB: number;
-
-        if (this.sortOption.startsWith("ImportDate")) {
-          dateA = a.stat.ctime;
-          dateB = b.stat.ctime;
-        } else { // UpdatedDate
-          dateA = a.stat.mtime;
-          dateB = b.stat.mtime;
-        }
-
-        if (this.sortOption.endsWith("Asc")) {
-          return dateA - dateB;
-        } else { // Desc
-          return dateB - dateA;
-        }
-      });
-    }
-
-    if (filteredPapers.length > 0) {
-      for (const paper of filteredPapers) {
-        const paperDiv = papersDiv.createEl("div", { cls: "researcher-library-paper" });
-        const frontmatter = this.app.metadataCache.getFileCache(paper)?.frontmatter;
-
-        const contentDiv = paperDiv.createEl("div", { cls: "researcher-library-paper-content" });
-        const setting = new Setting(contentDiv)
-          .addExtraButton((btn) => {
-            btn.setIcon("pencil").setTooltip("Edit metadata").onClick(() => {
-              const modal = new EditMetadataModal(this.app, paper);
-              modal.onClose = () => {
-                setTimeout(() => {
-                  this.renderPapers();
-                }, 500);
-              };
-              modal.open();
-            });
-          })
-          .addExtraButton((btn) => {
-            const notePath = `researcher-library/notes/${paper.basename}.md`;
-            const noteFile = this.app.vault.getAbstractFileByPath(notePath);
-            if (noteFile instanceof TFile) {
-              btn.setIcon("file-edit").setTooltip("Edit note").onClick(() => {
-                void this.app.workspace.getLeaf(true).openFile(noteFile);
-              });
-            } else {
-              btn.setIcon("file-plus-2").setTooltip("Create note for this paper").onClick(() => {
-                void this.plugin.createNoteForPaper(paper);
-              });
-            }
-          });
-                  
-        setting.descEl.createEl("div", { text: `Date imported: ${new Date(paper.stat.ctime).toLocaleDateString()}` });
-        setting.descEl.createEl("div", { text: `Last updated: ${new Date(paper.stat.mtime).toLocaleDateString()}` });
-                  
-        const nameEl = setting.nameEl;
-        nameEl.empty();
-        const link = nameEl.createEl("a", {
-          text: frontmatter?.title || `${paper.basename}.pdf`,
-          href: "#",
-        });
-        link.addEventListener("click", (event) => {
-          event.preventDefault();
-          const notePath = `researcher-library/notes/${paper.basename}.md`;
-          const noteFile = this.app.vault.getAbstractFileByPath(notePath);
-          if (noteFile instanceof TFile) {
-            void this.app.workspace.getLeaf(true).openFile(noteFile);
-          } else {
-            void this.plugin.createNoteForPaper(paper);
-          }
-        });
-
-        const detailsDiv = paperDiv.createEl("div", { cls: "researcher-library-paper-details" });
-        detailsDiv.createEl("span", { text: `Status: ${frontmatter?.status || "N/A"}` });
-        detailsDiv.createEl("span", { text: `Category: ${frontmatter?.category || "N/A"}` });
       }
-    } else {
-      papersDiv.createEl("p", { text: "No papers found." });
+      if (!query) {
+        return true;
+      }
+      return [
+        frontmatter.title,
+        frontmatter.author,
+        frontmatter.category,
+        frontmatter.publicationYear,
+        paper.basename,
+      ].some((value) => frontmatterText(value).toLocaleLowerCase().includes(query));
+    });
+
+    this.sortPapers(filteredPapers);
+    if (filteredPapers.length === 0) {
+      papersContainer.createEl("p", {
+        cls: "researcher-library-empty",
+        text: papers.length === 0
+          ? "Your library is empty. Import a PDF to get started."
+          : "No papers match the current filters.",
+      });
+      return;
+    }
+
+    for (const paper of filteredPapers) {
+      this.renderPaper(papersContainer, paper);
     }
   }
 
-  async onClose() {
-    // Nothing to clean up.
+  async onClose(): Promise<void> {
+    if (this.renderFrame !== null) {
+      window.cancelAnimationFrame(this.renderFrame);
+      this.renderFrame = null;
+    }
   }
+
+  private renderPaper(container: HTMLElement, paper: TFile): void {
+    const frontmatter = getPaperFrontmatter(this.app, paper);
+    const paths = getPaperPaths(this.app, paper);
+    const title = frontmatterText(frontmatter.title) || paper.basename;
+    const author = frontmatterText(frontmatter.author);
+    const publicationYear = frontmatterText(frontmatter.publicationYear);
+    const category = frontmatterText(frontmatter.category);
+    const status = normalizePaperStatus(frontmatter.status);
+    const statusLabel = PAPER_STATUSES.find(([value]) => value === status)?.[1] ?? "To read";
+
+    const card = container.createDiv({ cls: "researcher-library-paper" });
+    const setting = new Setting(card)
+      .setDesc(author || "Unknown author")
+      .addExtraButton((button) => {
+        button.setIcon("file-text").setTooltip("Open PDF").onClick(() => {
+          void this.plugin.openPdfForPaper(paper);
+        });
+      })
+      .addExtraButton((button) => {
+        const note = this.app.vault.getAbstractFileByPath(paths.notePath);
+        button
+          .setIcon(note instanceof TFile ? "file-edit" : "file-plus-2")
+          .setTooltip(note instanceof TFile ? "Open note" : "Create note")
+          .onClick(() => {
+            void this.plugin.createNoteForPaper(paper);
+          });
+      })
+      .addExtraButton((button) => {
+        button.setIcon("pencil").setTooltip("Edit metadata").onClick(() => {
+          new EditMetadataModal(this.app, this.plugin, paper, () => this.scheduleRender()).open();
+        });
+      });
+
+    setting.nameEl.empty();
+    const titleLink = setting.nameEl.createEl("a", {
+      cls: "researcher-library-title",
+      text: title,
+      href: paths.pdfPath,
+    });
+    titleLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      void this.plugin.openPdfForPaper(paper);
+    });
+
+    const details = card.createDiv({ cls: "researcher-library-paper-details" });
+    this.addDetail(details, "Status", statusLabel);
+    if (publicationYear) {
+      this.addDetail(details, "Published", publicationYear);
+    }
+    if (category) {
+      this.addDetail(details, "Category", category);
+    }
+    this.addDetail(details, "Imported", formatDate(frontmatter.importedAt, paper.stat.ctime));
+    this.addDetail(details, "Updated", formatDate(undefined, paper.stat.mtime));
+  }
+
+  private addDetail(container: HTMLElement, label: string, value: string): void {
+    const detail = container.createSpan({ cls: "researcher-library-detail" });
+    detail.createSpan({ cls: "researcher-library-detail-label", text: `${label}: ` });
+    detail.appendText(value);
+  }
+
+  private sortPapers(papers: TFile[]): void {
+    papers.sort((a, b) => {
+      if (this.sortOption === "none") {
+        return 0;
+      }
+      if (this.sortOption === "title-asc") {
+        const titleA = frontmatterText(getPaperFrontmatter(this.app, a).title) || a.basename;
+        const titleB = frontmatterText(getPaperFrontmatter(this.app, b).title) || b.basename;
+        return titleA.localeCompare(titleB);
+      }
+
+      const useImportDate = this.sortOption.startsWith("import-");
+      const dateA = useImportDate ? a.stat.ctime : a.stat.mtime;
+      const dateB = useImportDate ? b.stat.ctime : b.stat.mtime;
+      return this.sortOption.endsWith("-asc") ? dateA - dateB : dateB - dateA;
+    });
+  }
+}
+
+function formatDate(value: unknown, fallbackTimestamp: number): string {
+  const parsed = typeof value === "string" ? Date.parse(value) : Number.NaN;
+  const timestamp = Number.isNaN(parsed) ? fallbackTimestamp : parsed;
+  return new Date(timestamp).toLocaleDateString();
 }
