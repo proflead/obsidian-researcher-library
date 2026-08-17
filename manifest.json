@@ -1,9 +1,9 @@
 {
 	"id": "researcher-library",
 	"name": "Researcher Library",
-	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "A plugin to help researchers manage their literature.",
+	"version": "1.1.0",
+	"minAppVersion": "1.7.2",
+	"description": "Import, organize, and annotate research papers inside your vault.",
 	"author": "Vladislav Guzey",
 	"authorUrl": "https://proflead.dev",
 	"fundingUrl": "https://github.com/sponsors/proflead",

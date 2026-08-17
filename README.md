@@ -1,50 +1,81 @@
-# Researcher Library Obsidian Plugin
+# Researcher Library
 
-## Project Overview
+Researcher Library is an Obsidian plugin for importing, organizing, and annotating research papers without moving the workflow outside your vault.
 
-This plugin helps researchers manage their literature within Obsidian. It allows users to add PDF files of research papers, automatically extract metadata, and organize their reading list.
+## Features
 
-## Core Features
+- Import one or more PDF files from the ribbon, command palette, or library view.
+- Read embedded PDF metadata such as title and author.
+- Track publication year, category, and reading status.
+- Search and sort the library by common paper fields.
+- Open a paper's PDF directly or create a linked note for it.
+- Keep paper records connected when their managed PDF or note is renamed.
+- Remove a paper record, its PDF, and its note through Obsidian's trash flow.
 
-*   **PDF Import:** Add PDF files to your Obsidian vault.
-*   **Metadata Extraction:** Automatically extract metadata (title, authors, publication year) from PDFs.
-*   **Manual Metadata Editing:** Edit extracted metadata.
-*   **Reading Status:** Track the reading status of each paper ("To Read," "Reading," "Read").
-*   **Notes Integration:** Create and link notes to specific papers.
+> PDF creation dates are stored separately from publication years. A PDF's creation date usually describes when the file was produced, not when the paper was published.
 
-## How to Use (Planned)
+## Usage
 
-Detailed instructions on how to use the plugin will go here once the features are implemented and ready for user interaction. This will include steps for installing the plugin, importing PDFs, editing metadata, and managing reading status.
+1. Open **Researcher library** from the book icon in the ribbon.
+2. Select **Import**, then choose one or more PDFs.
+3. Select a paper title or its PDF button to open the document.
+4. Use the note button to create or open a linked research note.
+5. Use the pencil button to edit metadata or remove the paper.
+
+If an imported filename is already in use, the plugin creates a numbered copy instead of overwriting existing vault data.
+
+## Vault layout
+
+The plugin keeps its managed files under `researcher-library/`:
+
+```text
+researcher-library/
+├── notes/       # Research notes
+└── papers/
+    ├── md/      # Paper metadata records
+    └── *.pdf    # Imported PDFs
+```
+
+Existing records created by earlier versions remain supported through filename-based fallback links.
 
 ## Development
 
-This plugin is developed using TypeScript and the Obsidian API.
+Requirements: a current Node.js LTS release and npm.
 
-### Setup Development Environment
+```bash
+npm install
+npm run dev
+```
 
-1.  Clone this repository.
-2.  Install dependencies: `npm i`
-3.  Run in development mode: `npm run dev`
+The development command watches the TypeScript sources and writes `main.js` to the repository root, matching Obsidian's plugin directory layout.
 
-### Releasing New Versions
+Before submitting a change, run:
 
-*   Update `manifest.json` with the new version number and minimum Obsidian version.
-*   Update `versions.json` with the new version mapping.
-*   Create a new GitHub release, uploading `manifest.json`, `main.js`, and `styles.css` as binary attachments.
+```bash
+npm run lint
+npm run build
+```
+
+## Releasing
+
+1. Run `npm version patch`, `npm version minor`, or `npm version major` as appropriate.
+2. Run `npm run build`.
+3. Create a GitHub release whose tag matches `manifest.json`.
+4. Attach `main.js`, `manifest.json`, and `styles.css` to the release.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to open issues or submit pull requests.
+Issues and pull requests are welcome.
+
+## Privacy
+
+Researcher Library does not require an account, connect to external services, collect telemetry, or send vault data over the network. Imported PDFs, metadata records, and notes remain inside the user's vault.
 
 ## License
 
-This plugin is open-source and available under the MIT License. See the `LICENSE` file for more details.
-
----
+Researcher Library is available under the [MIT License](LICENSE).
 
 ## Support
 
-© 2025 Vladislav Guzey. All rights reserved.
-
-*   **Website**: [proflead.dev](https://proflead.dev)
-*   **GitHub Sponsor**: [Sponsor Me](https://github.com/sponsors/proflead/)
+- [proflead.dev](https://proflead.dev)
+- [Sponsor on GitHub](https://github.com/sponsors/proflead)
